@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Delivery Metrics</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+:root{
+    --brand1:#667eea; --brand2:#764ba2; --ok:#28a745; --warn:#ffc107; --err:#dc3545; --ink:#2c3e50;
+    --card-bg:#fff; --muted:#6c757d; --panel:#f8f9fa; --shadow:0 20px 40px rgba(0,0,0,0.1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:linear-gradient(135deg,var(--brand1) 0%,var(--brand2) 100%); min-height:100vh; padding:20px; }
+.dashboard-container { max-width:1400px; margin:0 auto; background:white; border-radius:15px; box-shadow:var(--shadow); overflow:hidden; }
+.dashboard-header { background:linear-gradient(135deg,#2c3e50,#34495e); color:white; padding:30px; text-align:center; position:relative; display:flex; align-items:center; justify-content:center; }
+.company-logo { position:absolute; left:30px; top:50%; transform:translateY(-50%); width:180px; height:180px; border-radius:10px; box-shadow:0 4px 15px rgba(0,0,0,0.2); object-fit:contain; background:white; padding:10px; }
+.header-content { flex:1; display:flex; flex-direction:column; align-items:center; margin-left:220px; }
+.dashboard-header h1 { font-size:clamp(1.5rem, 2.5vw + 1rem, 2.5rem); margin:0; font-weight:700; }
+.export-btn { position:absolute; top:20px; right:20px; padding:12px 24px; background:linear-gradient(135deg,#28a745,#20c997); color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.9rem; transition:all 0.3s ease; display:flex; align-items:center; gap:8px; }
+.export-btn:hover { transform:translateY(-2px); box-shadow:0 5px 15px rgba(40,167,69,0.4); }
+.export-btn[aria-busy="true"] { background: #6c757d; cursor: not-allowed; transform: none; box-shadow: none; }
+.export-status { position:fixed; top:20px; right:20px; padding:12px 20px; background:var(--ok); color:white; border-radius:8px; font-weight:600; z-index:1000; transform:translateX(400px); transition:transform 0.3s ease; }
+.export-status.show { transform:translateX(0);}
+.upload-section { padding:30px; background:var(--panel); border-bottom:1px solid #e9ecef; }
+.upload-container { display:flex; align-items:center; justify-content:center; gap:20px; flex-wrap:wrap; }
+.file-input-wrapper { position:relative; overflow:hidden; display:inline-block;}
+.file-input-wrapper input[type=file] { position:absolute; left:-9999px;}
+.file-input-label { padding:15px 30px; background:linear-gradient(135deg,var(--brand1),var(--brand2)); color:white; border-radius:8px; cursor:pointer; font-weight:600; transition:all 0.3s ease;}
+.file-input-label:hover { transform:translateY(-2px); box-shadow:0 5px 15px rgba(102,126,234,0.4);}
+.upload-status { padding:10px 20px; border-radius:5px; font-weight:600;}
+.upload-success{ background:#d4edda; color:#155724; border:1px solid #c3e6cb;}
+.upload-error{ background:#f8d7da; color:#721c24; border:1px solid #f5c6cb;}
+.filters-section { padding:20px 30px; background:#fff; border-bottom:1px solid #e9ecef; display:flex; gap:20px; flex-wrap:wrap; align-items:center;}
+.filter-group { display:flex; flex-direction:column; gap:5px;}
+.filter-group label { font-weight:600; color:#495057; font-size:0.9rem;}
+.filter-group select { padding:8px 12px; border:2px solid #e9ecef; border-radius:5px; font-size:0.9rem; transition:border-color 0.3s ease;}
+.filter-group select:focus { outline: none; border-color:var(--brand1);}
+.clear-filters-btn { padding:8px 16px; background:#dc3545; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:600; transition:background-color 0.3s ease;}
+.clear-filters-btn:hover { background:#c82333;}
+.active-filters { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;}
+.filter-badge { background:var(--brand1); color:white; padding:4px 12px; border-radius:15px; font-size:0.8rem; display:flex; align-items:center; gap:5px;}
+.filter-badge .remove{ cursor:pointer; font-weight:bold;}
+.summary-stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:20px; padding:30px; background:var(--panel);}
+.stat-card{ background:white; padding:20px; border-radius:10px; text-align:center; box-shadow:0 2px 10px rgba(0,0,0,0.1);}
+.stat-value{ font-size:2rem; font-weight:700; color:var(--ink); margin-bottom:5px;}
+.stat-label{ color:var(--muted); font-size:0.9rem; }
+.metrics-grid { display: flex; flex-wrap: wrap; flex-direction: column; gap:30px; padding:30px;}
+.metric-row{ width:100%; display:flex; flex-direction:row; gap:30px;}
+.metric-card{ background:white; border-radius:12px; box-shadow:0 4px 15px rgba(0,0,0,0.1); overflow:hidden; transition:transform 0.3s ease, box-shadow 0.3s ease; cursor:pointer; min-width:0;}
+.metric-card.full-width{ width:100%; max-width:100%; min-width:0;}
+.metric-card.flex{ flex:1 1 0px;}
+.metric-header{ background:linear-gradient(135deg,var(--brand1),var(--brand2)); color:white; padding:20px; text-align:center;}
+.metric-header h3 { font-size:1.3rem; margin-bottom:0; }
+.metric-content{ padding:20px; min-height:350px; position:relative;}
+.cross-filter-info{ position:absolute; top:10px; right:10px; background:rgba(102,126,234,0.1); color:var(--brand1); padding:5px 10px; border-radius:15px; font-size:0.8rem; font-weight:600;}
+.exporting .cross-filter-info{ display:none;}
+.exporting .export-btn{ display:none;}
+.spinner { width:16px; height:16px; border:2px solid transparent; border-top:2px solid white; border-radius:50%; animation:spin 1s linear infinite;}
+@keyframes spin{ to{ transform:rotate(360deg); } }
+.loading-message{ text-align:center; padding:20px; color:#666; font-style:italic;}
+@media (max-width:1050px) { .metric-row{ flex-direction:column; gap:30px; } .metric-card.flex, .metric-card.full-width{ width:100%;} }
+@media (max-width:1024px) { .dashboard-header{flex-direction:column; padding:20px; text-align:center;} .company-logo{position:static; transform:none; margin-bottom:20px; width:120px; height:120px;} .header-content{margin-left:0;} .export-btn{position:static; margin-top:15px; width:fit-content; align-self:center;} }
+@media (max-width:768px){ .metrics-grid{padding:10px; gap:20px;} .metric-row{gap:20px;} .filters-section{flex-direction:column; align-items:stretch;} .upload-container{flex-direction:column;} .company-logo{width:100px; height:100px;} }
+@media (max-width:480px){ .dashboard-header{padding:15px;} .company-logo{width:80px; height:80px;} }
+    </style>
+</head>
+<body>
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <img src="Logo icon.png" alt="Company Logo" class="company-logo" onerror="this.style.display='none'">
+        <div class="header-content">
+            <h1>Delivery Metrics</h1>
+        </div>
+        <button class="export-btn" id="exportBtn" aria-busy="false"><span id="exportIcon">📸</span><span id="exportText">Export Dashboard</span></button>
+    </div>
+    <div class="export-status" id="exportStatus" role="status" aria-live="polite">Dashboard exported successfully!</div>
+    <div class="upload-section">
+        <div class="upload-container">
+            <div class="file-input-wrapper">
+                <input type="file" id="csvFile" accept=".csv" />
+                <label for="csvFile" class="file-input-label">
+                    📁 Upload CSV Data
+                </label>
+            </div>
+            <div id="uploadStatus" class="upload-status" style="display: none;"></div>
+        </div>
+    </div>
+    <div class="filters-section">
+        <div class="filter-group">
+            <label for="dateRange">Day of Week:</label>
+            <select id="dateRange">
+                <option value="all">All Days</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="orderStatus">Order Status:</label>
+            <select id="orderStatus">
+                <option value="all">All Orders</option>
+                <option value="Delivered">Delivered</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="Returned">Returned</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="timeFilter">Time Period:</label>
+            <select id="timeFilter">
+                <option value="all">All Hours</option>
+                <option value="lunch">Lunch (11 AM-3 PM)</option>
+                <option value="snacks">Snacks (3 PM-7 PM)</option>
+                <option value="dinner">Dinner (7 PM-12 AM)</option>
+                <option value="latenight">Late Night (12 AM-5 AM)</option>
+            </select>
+        </div>
+        <button class="clear-filters-btn" id="clearFilters">Clear All Filters</button>
+        <div class="active-filters" id="activeFilters"></div>
+    </div>
+    <div class="summary-stats">
+        <div class="stat-card"><div class="stat-value" id="totalOrders">0</div><div class="stat-label">Total Orders</div></div>
+        <div class="stat-card"><div class="stat-value" id="successRate">0%</div><div class="stat-label">Success Rate</div></div>
+        <div class="stat-card"><div class="stat-value" id="kpt">0</div><div class="stat-label">KPT (min)</div></div>
+        <div class="stat-card"><div class="stat-value" id="avgDeliveryTime">0</div><div class="stat-label">Avg Delivery Time (min)</div></div>
+        <div class="stat-card"><div class="stat-value" id="avgRideTime">0</div><div class="stat-label">Avg Ride Time (min)</div></div>
+        <div class="stat-card"><div class="stat-value" id="mfrAccuracy">0%</div><div class="stat-label">MFR Accuracy</div></div>
+    </div>
+    <div class="metrics-grid">
+        <div class="metric-row">
+            <div class="metric-card full-width" data-chart="orderVolume">
+                <div class="metric-header"><h3>Day-Wise Orders</h3></div>
+                <div class="metric-content"><div class="cross-filter-info">Click to filter</div>
+                    <canvas id="orderVolumeChart"></canvas></div>
+            </div>
+        </div>
+        <div class="metric-row">
+            <div class="metric-card full-width" data-chart="peakHour">
+                <div class="metric-header"><h3>Hourly Orders</h3></div>
+                <div class="metric-content"><div class="cross-filter-info">Click hours</div>
+                    <canvas id="peakHourChart"></canvas></div>
+            </div>
+        </div>
+        <div class="metric-row">
+            <div class="metric-card full-width" data-chart="hourlyKPT">
+                <div class="metric-header"><h3>Hourly KPT</h3></div>
+                <div class="metric-content">
+                    <canvas id="hourlyKPTChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="metric-row">
+            <div class="metric-card flex" data-chart="orderStatus">
+                <div class="metric-header"><h3>Order Status Distribution</h3></div>
+                <div class="metric-content"><div class="cross-filter-info">Click segments</div>
+                    <canvas id="orderStatusChart"></canvas></div>
+            </div>
+            <div class="metric-card flex" data-chart="kitchenEfficiency">
+                <div class="metric-header"><h3>KPT Buckets</h3></div>
+                <div class="metric-content"><div class="cross-filter-info">Click bars</div>
+                    <canvas id="kitchenEfficiencyChart"></canvas></div>
+            </div>
+        </div>
+        <div class="metric-row">
+            <div class="metric-card flex" data-chart="mfrAccuracy">
+                <div class="metric-header"><h3>MFR Accuracy</h3></div>
+                <div class="metric-content"><div class="cross-filter-info">Click to explore</div>
+                    <canvas id="mfrAccuracyChart"></canvas></div>
+            </div>
+            <div class="metric-card flex" data-chart="deliveryTime">
+                <div class="metric-header"><h3>Ride Time</h3></div>
+                <div class="metric-content"><div class="cross-filter-info">Click points</div>
+                    <canvas id="deliveryTimeChart"></canvas></div>
+            </div>
+        </div>
+        <div class="metric-row">
+            <div class="metric-card flex" data-chart="fulfillment">
+                <div class="metric-header"><h3>Order to Delivery</h3></div>
+                <div class="metric-content"><div class="cross-filter-info">Click timeline</div>
+                    <canvas id="fulfillmentChart"></canvas></div>
+            </div>
+            <div class="metric-card flex" data-chart="cancellation">
+                <div class="metric-header"><h3>Cancellation Pattern Analysis</h3></div>
+                <div class="metric-content"><div class="cross-filter-info">Click patterns</div>
+                    <canvas id="cancellationChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script defer src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const hourToLabel = (h) => h===0?'12 AM':h<12?`${h} AM`:h===12?'12 PM':`${h-12} PM`;
+const minutesBetween = (a, b) => (b - a) / 60000;
+const average = (arr) => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+const shortDateFmt = new Intl.DateTimeFormat(undefined, { month:'short', day:'2-digit' });
+
+const FIELDS = {
+    received: ['Received Time','received_time','receivedTime'],
+    accepted: ['Accepted Time','accepted_time','acceptedTime'],
+    markReady: ['Mark Ready Time','mark_ready_time','markReadyTime'],
+    riderArrival: ['Rider Arrival Time','rider_arrival_time','riderArrivalTime'],
+    pickedUp: ['Picked up Time','picked_up_time','pickedUpTime'],
+    delivered: ['Delivered Time','delivered_time','deliveredTime'],
+    status: ['Order Status','order_status','orderStatus'],
+    id: ['Order ID','order_id','orderId','id','ID']
+};
+function getField(row, keys, fallback = null) { for (const k of keys) { if (row[k]) return row[k]; } return fallback; }
+
+class RestaurantDashboard {
+    constructor() {
+        this.data = [];
+        this.filteredData = [];
+        this.charts = {};
+        this.crossFilters = {};
+        this.activeFilters = [];
+        this.availableDays = new Set();
+        this.lastClicked = {};
+        this.hourOrder = [11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4,5,6,7,8,9,10];
+        this.debouncedApplyFilters = this.debounce(()=>this.applyFilters(), 120);
+        this.initializeEventListeners();
+        this.initializeExportFunctionality();
+        this.registerChartPlugins();
+    }
+
+    debounce(fn, ms=120) { let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), ms); }; }
+
+    initializeEventListeners() {
+        $('csvFile').addEventListener('change', (e) => this.handleFileUpload(e));
+        $('dateRange').addEventListener('change', this.debouncedApplyFilters);
+        $('orderStatus').addEventListener('change', this.debouncedApplyFilters);
+        $('timeFilter').addEventListener('change', this.debouncedApplyFilters);
+        $('clearFilters').addEventListener('click', () => this.clearAllFilters());
+    }
+
+    registerChartPlugins() {
+        if (window.Chart && window.ChartDataLabels) {
+            try {
+                Chart.register(ChartDataLabels);
+            } catch (_) { /* already registered */ }
+        }
+    }
+
+    initializeExportFunctionality() {
+        const exportBtn = $('exportBtn');
+        exportBtn.addEventListener('click', async () => {
+            if (this.data.length === 0) { this.showExportStatus('Please upload data before exporting', 'error'); return; }
+            if (typeof html2canvas === 'undefined') { this.showExportStatus('Export library not loaded', 'error'); return; }
+            try {
+                exportBtn.setAttribute('aria-busy','true');
+                exportBtn.disabled = true;
+                $('exportIcon').innerHTML = '<div class="spinner"></div>';
+                $('exportText').textContent = 'Exporting...';
+                document.body.classList.add('exporting');
+                await new Promise(resolve => setTimeout(resolve, 300));
+                const canvas = await html2canvas(document.querySelector('.dashboard-container'), {
+                    backgroundColor: '#ffffff', scale: 2, useCORS: true, allowTaint: true, logging: false, scrollX: 0, scrollY: 0
+                });
+                const link = document.createElement('a');
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                link.download = `restaurant-dashboard-${timestamp}.png`;
+                link.href = canvas.toDataURL('image/png', 1.0);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                this.showExportStatus('Dashboard exported successfully!', 'success');
+            } catch (error) {
+                this.showExportStatus('Export failed. Please try again.', 'error');
+            } finally {
+                exportBtn.disabled = false;
+                exportBtn.setAttribute('aria-busy','false');
+                $('exportIcon').textContent = '📸';
+                $('exportText').textContent = 'Export Dashboard';
+                document.body.classList.remove('exporting');
+            }
+        });
+    }
+
+    showExportStatus(message, type) {
+        const status = $('exportStatus');
+        status.textContent = message;
+        status.style.background = type === 'error' ? '#dc3545' : '#28a745';
+        status.classList.add('show');
+        setTimeout(() => status.classList.remove('show'), 3000);
+    }
+
+    handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            dynamicTyping: false,
+            complete: (results) => {
+                try {
+                    if (!results.data || results.data.length === 0) {
+                        this.showUploadStatus('error', '❌ No valid data rows found in CSV');
+                        return;
+                    }
+                    this.data = results.data.map(row => {
+                        this.parseDateFields(row);
+                        return row;
+                    }).filter(row => this.hasValidOrderId(row));
+                    this.filteredData = [...this.data];
+                    this.extractAvailableDays();
+                    this.populateDayFilter();
+                    this.showUploadStatus('success', `✅ Successfully loaded ${this.data.length} orders`);
+                    this.updateSummaryStats();
+                    this.createAllCharts();
+                } catch (error) {
+                    this.showUploadStatus('error', `❌ Error: ${error.message}`);
+                }
+            },
+            error: (err) => {
+                this.showUploadStatus('error', `❌ Error: ${err.message}`);
+            }
+        });
+    }
+
+    showUploadStatus(type, message) {
+        const statusDiv = $('uploadStatus');
+        statusDiv.className = `upload-status upload-${type}`;
+        statusDiv.textContent = message;
+        statusDiv.style.display = 'block';
+        setTimeout(() => statusDiv.style.display = 'none', 5000);
+    }
+
+    parseDateFields(row) {
+        const fields = [...FIELDS.received, ...FIELDS.accepted, ...FIELDS.markReady, ...FIELDS.riderArrival, ...FIELDS.pickedUp, ...FIELDS.delivered];
+        fields.forEach(field => {
+            if (row[field] && String(row[field]).trim()) row[field] = this.parseDate(String(row[field]).trim());
+            else row[field] = null;
+        });
+    }
+
+    parseDate(dateString) {
+        if (!dateString) return null;
+        let d = new Date(dateString);
+        if (!isNaN(d) && d.getFullYear() > 2020) return d;
+
+        const formats = [
+            [/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/, (m)=> new Date(+m[3], +m[1]-1, +m[2], +m[4], +m[5], +(m[6]||0))], // MM/DD/YYYY
+            [/^(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/, (m)=> new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +(m[6]||0))], // YYYY-MM-DD
+            [/^(\d{1,2})-(\d{1,2})-(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/, (m)=> new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], +(m[6]||0))]  // DD-MM-YYYY
+        ];
+        for (const [re, build] of formats) {
+            const m = dateString.match(re);
+            if (m) {
+                d = build(m);
+                if (!isNaN(d) && d.getFullYear() > 2020) return d;
+            }
+        }
+        return null;
+    }
+
+    hasValidOrderId(row) { return FIELDS.id.some(field => row[field] && String(row[field]).trim() !== ''); }
+
+    extractAvailableDays() {
+        this.availableDays.clear();
+        this.data.forEach(order => {
+            const receivedTime = this.getReceivedTime(order);
+            if (receivedTime) this.availableDays.add(dayNames[receivedTime.getDay()]);
+        });
+    }
+
+    populateDayFilter() {
+        const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const select = $('dateRange');
+        while (select.children.length > 1) select.removeChild(select.lastChild);
+        dayOrder.forEach(day => {
+            if (this.availableDays.has(day)) {
+                const option = document.createElement('option');
+                option.value = day;
+                option.textContent = day;
+                select.appendChild(option);
+            }
+        });
+    }
+
+    getReceivedTime(order) { return getField(order, FIELDS.received); }
+    getOrderStatus(order) { return getField(order, FIELDS.status, 'Unknown'); }
+    getAcceptedTime(order) { return getField(order, FIELDS.accepted); }
+    getMarkReadyTime(order) { return getField(order, FIELDS.markReady); }
+    getRiderArrivalTime(order) { return getField(order, FIELDS.riderArrival); }
+    getPickedUpTime(order) { return getField(order, FIELDS.pickedUp); }
+    getDeliveredTime(order) { return getField(order, FIELDS.delivered); }
+
+    // ===== Drilldown/Cross-filtering Logic =====
+    applyCrossFilter(tag, fn, label) {
+        if (this.crossFilters[tag]) {
+            delete this.crossFilters[tag];
+            this.lastClicked[tag] = null;
+            this.activeFilters = this.activeFilters.filter(l => !l.startsWith(tag + ': '));
+        } else {
+            this.crossFilters[tag] = fn;
+            this.lastClicked[tag] = label;
+            this.activeFilters = this.activeFilters.filter(l => !l.startsWith(tag + ': '));
+            this.activeFilters.push(label);
+        }
+        this.applyFilters();
+    }
+
+    removeCrossFilter(tag) {
+        delete this.crossFilters[tag];
+        this.lastClicked[tag] = null;
+        this.activeFilters = this.activeFilters.filter(l => !l.startsWith(tag + ': '));
+        this.applyFilters();
+    }
+
+    clearAllFilters() {
+        this.crossFilters = {};
+        this.activeFilters = [];
+        this.lastClicked = {};
+        $('dateRange').value = 'all';
+        $('orderStatus').value = 'all';
+        $('timeFilter').value = 'all';
+        document.querySelectorAll('.metric-card').forEach(card => card.classList.remove('filtered'));
+        this.applyFilters();
+    }
+
+    updateActiveFiltersDisplay() {
+        const container = $('activeFilters');
+        container.innerHTML = '';
+        this.activeFilters.forEach(label => {
+            const badge = document.createElement('div');
+            badge.className = 'filter-badge';
+            badge.innerHTML = `${label} <span class="remove" aria-label="Remove filter">&times;</span>`;
+            badge.querySelector('.remove').addEventListener('click', () => {
+                const tag = label.split(':')[0];
+                this.removeCrossFilter(tag);
+            });
+            container.appendChild(badge);
+        });
+    }
+
+    applyFilters() {
+        const dateRange = $('dateRange').value;
+        const orderStatus = $('orderStatus').value;
+        const timeFilter = $('timeFilter').value;
+
+        this.filteredData = this.data.filter(order => {
+            const receivedTime = this.getReceivedTime(order);
+            if (dateRange !== 'all' && receivedTime) {
+                if (dayNames[receivedTime.getDay()] !== dateRange) return false;
+            }
+            if (orderStatus !== 'all' && this.getOrderStatus(order) !== orderStatus) return false;
+            if (timeFilter !== 'all' && receivedTime) {
+                const hour = receivedTime.getHours();
+                if (timeFilter === 'lunch' && (hour<11||hour>=15)) return false;
+                if (timeFilter === 'snacks' && (hour<15||hour>=19)) return false;
+                if (timeFilter === 'dinner' && (hour<19||hour>=24)) return false;
+                if (timeFilter === 'latenight' && (hour>=5&&hour<24)) return false;
+            }
+            return true;
+        });
+
+        for (const fn of Object.values(this.crossFilters)) {
+            this.filteredData = this.filteredData.filter(fn);
+        }
+
+        this.updateSummaryStats();
+        this.updateAllCharts();
+        this.updateActiveFiltersDisplay();
+    }
+
+    // ===== Metrics/Aggregations =====
+    updateSummaryStats() {
+        const totalOrders = this.filteredData.length;
+        const deliveredOrders = this.filteredData.filter(o => this.getOrderStatus(o) === 'Delivered').length;
+        const successRatePct = totalOrders > 0 ? (deliveredOrders / totalOrders * 100) : 0;
+
+        const prepTimes = this.filteredData
+            .filter(o => this.getAcceptedTime(o) && this.getMarkReadyTime(o))
+            .map(o => minutesBetween(this.getAcceptedTime(o), this.getMarkReadyTime(o)));
+
+        const kptMin = average(prepTimes);
+
+        const deliveryTimes = this.filteredData
+            .filter(o => this.getOrderStatus(o) === 'Delivered' && this.getReceivedTime(o) && this.getDeliveredTime(o))
+            .map(o => minutesBetween(this.getReceivedTime(o), this.getDeliveredTime(o)));
+
+        const rideTimes = this.filteredData
+            .filter(o => this.getOrderStatus(o) === 'Delivered' && this.getPickedUpTime(o) && this.getDeliveredTime(o))
+            .map(o => minutesBetween(this.getPickedUpTime(o), this.getDeliveredTime(o)));
+
+        const mfrData = this.calculateMFRAccuracy();
+
+        $('totalOrders').textContent = totalOrders.toLocaleString();
+        $('successRate').textContent = `${successRatePct.toFixed(1)}%`;
+        $('kpt').textContent = kptMin ? kptMin.toFixed(1) : '0';
+        $('avgDeliveryTime').textContent = deliveryTimes.length ? average(deliveryTimes).toFixed(1) : '0';
+        $('avgRideTime').textContent = rideTimes.length ? average(rideTimes).toFixed(1) : '0';
+        $('mfrAccuracy').textContent = `${mfrData.accuracy}%`;
+    }
+
+    calculateMFRAccuracy() {
+        const validOrders = this.filteredData.filter(order =>
+            this.getOrderStatus(order) === 'Delivered' &&
+            this.getMarkReadyTime(order) && this.getRiderArrivalTime(order) && this.getPickedUpTime(order)
+        );
+        let accurateCount = 0;
+        validOrders.forEach(order => {
+            const mr = this.getMarkReadyTime(order);
+            const ra = this.getRiderArrivalTime(order);
+            const pu = this.getPickedUpTime(order);
+            const diffMins = ra <= mr ? minutesBetween(mr, pu) : minutesBetween(pu, ra);
+            if (Math.abs(diffMins) <= 3) accurateCount++;
+        });
+        return {
+            accuracy: validOrders.length > 0 ? ((accurateCount / validOrders.length) * 100).toFixed(1) : 0,
+            total: validOrders.length,
+            accurate: accurateCount
+        };
+    }
+
+    // ===== Charts =====
+    updateAllCharts() {
+        if (!Object.keys(this.charts).length) {
+            this.createAllCharts();
+            return;
+        }
+        this.updateOrderVolumeChart();
+        this.updateOrderStatusChart();
+        this.updateKitchenEfficiencyChart();
+        this.updateMFRAccuracyChart();
+        this.updateDeliveryTimeChart();
+        this.updateFulfillmentChart();
+        this.updateCancellationChart();
+        this.updatePeakHourChart();
+        this.updateHourlyKPTChart();
+    }
+
+    createAllCharts() {
+        if (this.filteredData.length === 0) return;
+        this.createOrderVolumeChart();
+        this.createOrderStatusChart();
+        this.createKitchenEfficiencyChart();
+        this.createMFRAccuracyChart();
+        this.createDeliveryTimeChart();
+        this.createFulfillmentChart();
+        this.createCancellationChart();
+        this.createPeakHourChart();
+        this.createHourlyKPTChart();
+    }
+
+    // ---- Order Volume
+    createOrderVolumeChart() {
+        const ctx = $('orderVolumeChart').getContext('2d');
+        const { labels, data } = this.computeOrderVolume();
+        this.charts.orderVolume = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets: [{ label: 'Orders', data, borderColor: 'rgb(102, 126, 234)', backgroundColor: 'rgba(102, 126, 234, 0.1)', fill: true, tension: 0.4 }]},
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const selectedLabel = labels[index];
+                        const selectedDate = this.orderVolumeRaw[index]; // raw Date.toDateString key
+                        const label = `orderVolume: ${selectedLabel}`;
+                        this.applyCrossFilter('orderVolume', (order) => {
+                            const receivedTime = this.getReceivedTime(order);
+                            return receivedTime && receivedTime.toDateString() === selectedDate;
+                        }, label);
+                    }
+                },
+                plugins:{
+                    legend:{display:false},
+                    datalabels:{
+                        display:true,
+                        color:'#000',
+                        backgroundColor:'rgba(255,255,255,0.8)',
+                        borderColor:'#ccc', borderWidth:1, borderRadius:4, padding:4,
+                        font:{weight:'bold',size:11}, formatter: value=>value
+                    }
+                },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+    updateOrderVolumeChart() {
+        const chart = this.charts.orderVolume;
+        if (!chart) return;
+        const { labels, data } = this.computeOrderVolume();
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = data;
+        chart.update();
+    }
+    computeOrderVolume() {
+        const map = new Map();
+        this.filteredData.forEach(order => {
+            const rt = this.getReceivedTime(order);
+            if (!rt) return;
+            const key = rt.toDateString();
+            map.set(key, (map.get(key)||0)+1);
+        });
+        const keysSorted = Array.from(map.keys()).sort((a,b)=> new Date(a) - new Date(b));
+        this.orderVolumeRaw = keysSorted;
+        const labels = keysSorted.map(k => shortDateFmt.format(new Date(k)));
+        const data = keysSorted.map(k => map.get(k));
+        return { labels, data };
+    }
+
+    // ---- Order Status
+    createOrderStatusChart() {
+        const ctx = $('orderStatusChart').getContext('2d');
+        const { labels, data } = this.computeOrderStatus();
+        this.charts.orderStatus = new Chart(ctx, {
+            type: 'doughnut',
+            data: { labels, datasets:[{ data, backgroundColor:['#28a745','#dc3545','#ffc107','#17a2b8'] }]},
+            options: {
+                responsive:true, maintainAspectRatio:false,
+                onClick: (event, elements) => {
+                    if (elements && elements.length > 0) {
+                        const index = elements[0].index;
+                        const selectedStatus = labels[index];
+                        const label = `orderStatus: ${selectedStatus}`;
+                        this.applyCrossFilter('orderStatus', (order) => this.getOrderStatus(order) === selectedStatus, label);
+                    }
+                },
+                plugins:{
+                    legend:{position:'bottom'},
+                    datalabels:{
+                        display:true,
+                        color:'white',
+                        font:{weight:'bold',size:12},
+                        formatter: (value, context) => {
+                            const total = context.dataset.data.reduce((a,b)=>a+b,0);
+                            const percentage = total ? ((value/total)*100).toFixed(1) : 0;
+                            return `${value}\n(${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        });
+    }
+    updateOrderStatusChart() {
+        const chart = this.charts.orderStatus;
+        if (!chart) return;
+        const { labels, data } = this.computeOrderStatus();
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = data;
+        chart.update();
+    }
+    computeOrderStatus() {
+        const counts = new Map();
+        this.filteredData.forEach(order => {
+            const s = this.getOrderStatus(order);
+            counts.set(s, (counts.get(s)||0)+1);
+        });
+        const labels = Array.from(counts.keys());
+        const data = labels.map(l => counts.get(l));
+        return { labels, data };
+    }
+
+    // ---- Kitchen Efficiency (KPT buckets)
+    createKitchenEfficiencyChart() {
+        const ctx = $('kitchenEfficiencyChart').getContext('2d');
+        const { labels, data, total } = this.computeKPTBuckets();
+        this.charts.kitchenEfficiency = new Chart(ctx,{
+            type:'bar',
+            data:{ labels, datasets:[{ label:'Orders', data, backgroundColor:'rgba(102,126,234,0.8)'}]},
+            options:{
+                responsive:true, maintainAspectRatio:false,
+                onClick: (event, elements) => {
+                    if (elements && elements.length > 0) {
+                        const index = elements[0].index;
+                        const bucket = labels[index];
+                        const label = `kpt: ${bucket}`;
+                        this.applyCrossFilter('kpt', (order) => {
+                            const acc = this.getAcceptedTime(order), mr = this.getMarkReadyTime(order);
+                            if (!acc || !mr) return false;
+                            const t = minutesBetween(acc, mr);
+                            if (bucket === '0-5 mins') return t <= 5;
+                            if (bucket === '5-12 mins') return t > 5 && t <= 12;
+                            if (bucket === '12+ mins') return t > 12;
+                            return false;
+                        }, label);
+                    }
+                },
+                plugins:{
+                    legend:{display:false},
+                    datalabels:{
+                        display:true,
+                        color:'white',
+                        font:{weight:'bold',size:14},
+                        formatter:value=>{
+                            const percentage=total>0?((value/total)*100).toFixed(1):0;
+                            return `${percentage}%`;
+                        }
+                    }
+                },
+                scales:{y:{beginAtZero:true}}
+            }
+        });
+    }
+    updateKitchenEfficiencyChart() {
+        const chart = this.charts.kitchenEfficiency;
+        if (!chart) return;
+        const { labels, data } = this.computeKPTBuckets();
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = data;
+        chart.update();
+    }
+    computeKPTBuckets() {
+        const prepTimes = this.filteredData
+            .filter(order => this.getAcceptedTime(order) && this.getMarkReadyTime(order))
+            .map(order => minutesBetween(this.getAcceptedTime(order), this.getMarkReadyTime(order)));
+        const buckets = {'0-5 mins':0,'5-12 mins':0,'12+ mins':0};
+        prepTimes.forEach(time=>{
+            if(time<=5) buckets['0-5 mins']++;
+            else if(time<=12) buckets['5-12 mins']++;
+            else buckets['12+ mins']++;
+        });
+        const total=Object.values(buckets).reduce((a,b)=>a+b,0);
+        return { labels:Object.keys(buckets), data:Object.values(buckets), total };
+    }
+
+    // ---- MFR Accuracy
+    createMFRAccuracyChart() {
+        const ctx = $('mfrAccuracyChart').getContext('2d');
+        const { accurate, inaccurate } = this.computeMFRCounts();
+        this.charts.mfrAccuracy = new Chart(ctx,{
+            type:'pie',
+            data:{ labels:['Accurate MFR','Inaccurate MFR'], datasets:[{ data:[accurate,inaccurate], backgroundColor:['#28a745','#dc3545'] }]},
+            options:{
+                responsive:true, maintainAspectRatio:false,
+                onClick: (event, elements) => {
+                    if (elements && elements.length > 0) {
+                        const idx = elements[0].index;
+                        const isAcc = idx === 0;
+                        const label = `mfr: ${isAcc ? "Accurate" : "Inaccurate"} MFR`;
+                        this.applyCrossFilter('mfr', (order) => {
+                            if (!this.getMarkReadyTime(order) || !this.getRiderArrivalTime(order) || !this.getPickedUpTime(order) || this.getOrderStatus(order) !== "Delivered") return false;
+                            const mr = this.getMarkReadyTime(order);
+                            const ra = this.getRiderArrivalTime(order);
+                            const pu = this.getPickedUpTime(order);
+                            const diffMins = ra <= mr ? minutesBetween(mr, pu) : minutesBetween(pu, ra);
+                            const result = Math.abs(diffMins) <= 3;
+                            return (isAcc ? result : !result);
+                        }, label);
+                    }
+                },
+                plugins:{
+                    legend:{position:'bottom'},
+                    datalabels:{
+                        display:true,
+                        color:'white',
+                        font:{weight:'bold',size:12},
+                        formatter:(value,context)=>{
+                            const total = context.dataset.data.reduce((a,b)=>a+b,0);
+                            if(total===0)return'0%';
+                            const percentage=((value/total)*100).toFixed(1);
+                            return `${value}\n(${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        });
+    }
+    updateMFRAccuracyChart() {
+        const chart = this.charts.mfrAccuracy;
+        if (!chart) return;
+        const { accurate, inaccurate } = this.computeMFRCounts();
+        chart.data.datasets[0].data = [accurate, inaccurate];
+        chart.update();
+    }
+    computeMFRCounts() {
+        const mfr = this.calculateMFRAccuracy();
+        return { accurate: mfr.accurate, inaccurate: mfr.total - mfr.accurate };
+    }
+
+    // ---- Delivery Time (Ride time buckets)
+    createDeliveryTimeChart() {
+        const ctx = $('deliveryTimeChart').getContext('2d');
+        const { labels, data, total } = this.computeRideBuckets();
+        this.charts.deliveryTime = new Chart(ctx, {
+            type:'bar',
+            data:{ labels, datasets:[{ label:'Orders', data, backgroundColor:'rgba(40,167,69,0.8)' }]},
+            options:{
+                responsive:true, maintainAspectRatio:false,
+                onClick: (event, elements) => {
+                    if (elements && elements.length > 0) {
+                        const idx = elements[0].index;
+                        const bucket = labels[idx];
+                        const label = `ride: ${bucket}`;
+                        this.applyCrossFilter('ride', (order) => {
+                            const pick = this.getPickedUpTime(order), del = this.getDeliveredTime(order);
+                            if(!pick||!del) return false;
+                            const t = minutesBetween(pick, del);
+                            if(bucket==="0-15 min") return t<=15;
+                            if(bucket==="15-30 min") return t>15&&t<=30;
+                            if(bucket==="30-45 min") return t>30&&t<=45;
+                            if(bucket==="45+ min") return t>45;
+                            return false;
+                        },label);
+                    }
+                },
+                plugins:{
+                    legend:{display:false},
+                    datalabels:{
+                        display:true,
+                        color:'white',
+                        font:{weight:'bold',size:14},
+                        formatter:value=>{
+                            const percentage=total>0?((value/total)*100).toFixed(1):0;
+                            return `${percentage}%`;
+                        }
+                    }
+                },
+                scales:{y:{beginAtZero:true}}
+            }
+        });
+    }
+    updateDeliveryTimeChart() {
+        const chart = this.charts.deliveryTime;
+        if (!chart) return;
+        const { labels, data } = this.computeRideBuckets();
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = data;
+        chart.update();
+    }
+    computeRideBuckets() {
+        const times = this.filteredData
+            .filter(order=>this.getPickedUpTime(order)&&this.getDeliveredTime(order))
+            .map(order=> minutesBetween(this.getPickedUpTime(order), this.getDeliveredTime(order)));
+        const buckets={'0-15 min':0,'15-30 min':0,'30-45 min':0,'45+ min':0};
+        times.forEach(time=>{
+            if(time<=15) buckets['0-15 min']++;
+            else if(time<=30) buckets['15-30 min']++;
+            else if(time<=45) buckets['30-45 min']++;
+            else buckets['45+ min']++;
+        });
+        const total = Object.values(buckets).reduce((a,b)=>a+b,0);
+        return { labels:Object.keys(buckets), data:Object.values(buckets), total };
+    }
+
+    // ---- Fulfillment time (order to delivery)
+    createFulfillmentChart() {
+        const ctx = $('fulfillmentChart').getContext('2d');
+        const { labels, data, total } = this.computeFulfillmentBuckets();
+        this.charts.fulfillment = new Chart(ctx,{
+            type:'bar',
+            data:{ labels, datasets:[{ label:'Orders', data, backgroundColor:'rgba(255,193,7,0.8)' }]},
+            options:{
+                responsive:true, maintainAspectRatio:false,
+                onClick: (event, elements) => {
+                    if (elements && elements.length > 0) {
+                        const idx = elements[0].index;
+                        const bucket = labels[idx];
+                        const label = `fulfill: ${bucket}`;
+                        this.applyCrossFilter('fulfill', (order) => {
+                            const rcvd = this.getReceivedTime(order), del = this.getDeliveredTime(order);
+                            if(!rcvd||!del) return false;
+                            const t = minutesBetween(rcvd, del);
+                            if(bucket==="0-30 min") return t<=30;
+                            if(bucket==="30-60 min") return t>30&&t<=60;
+                            if(bucket==="60-90 min") return t>60&&t<=90;
+                            if(bucket==="90+ min") return t>90;
+                            return false;
+                        },label);
+                    }
+                },
+                plugins:{
+                    legend:{display:false},
+                    datalabels:{
+                        display:true,
+                        color:'white',
+                        font:{weight:'bold',size:14},
+                        formatter:value=>{
+                            const percentage=total>0?((value/total)*100).toFixed(1):0;
+                            return `${percentage}%`;
+                        }
+                    }
+                },
+                scales:{y:{beginAtZero:true}}
+            }
+        });
+    }
+    updateFulfillmentChart() {
+        const chart = this.charts.fulfillment;
+        if (!chart) return;
+        const { labels, data } = this.computeFulfillmentBuckets();
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = data;
+        chart.update();
+    }
+    computeFulfillmentBuckets() {
+        const times = this.filteredData
+            .filter(order=>this.getReceivedTime(order)&&this.getDeliveredTime(order))
+            .map(order=> minutesBetween(this.getReceivedTime(order), this.getDeliveredTime(order)));
+        const buckets={'0-30 min':0,'30-60 min':0,'60-90 min':0,'90+ min':0};
+        times.forEach(time=>{
+            if(time<=30) buckets['0-30 min']++;
+            else if(time<=60) buckets['30-60 min']++;
+            else if(time<=90) buckets['60-90 min']++;
+            else buckets['90+ min']++;
+        });
+        const total = Object.values(buckets).reduce((a,b)=>a+b,0);
+        return { labels:Object.keys(buckets), data:Object.values(buckets), total };
+    }
+
+    // ---- Cancellation (synthetic reasons)
+    createCancellationChart() {
+        const ctx = $('cancellationChart').getContext('2d');
+        const { labels, data } = this.computeCancellationSynthetic();
+        this.charts.cancellation = new Chart(ctx,{
+            type:'line',
+            data:{ labels, datasets:[{ label:'Cancelled Orders', data, borderColor:'rgb(220,53,69)', backgroundColor:'rgba(220,53,69,0.1)', fill:true, tension:0.4 }]},
+            options:{
+                responsive:true, maintainAspectRatio:false,
+                onClick: (event, elements) => {
+                    if (elements && elements.length > 0) {
+                        const idx = elements[0].index;
+                        const reason = labels[idx];
+                        const label = `cancel: ${reason}`;
+                        this.applyCrossFilter('cancel', (order) => {
+                            return this.getOrderStatus(order)==='Cancelled';
+                        },label);
+                    }
+                },
+                plugins:{
+                    legend:{display:false},
+                    datalabels:{
+                        display:true,
+                        backgroundColor:'rgba(255,255,255,0.8)',borderColor:'#ccc',borderWidth:1,borderRadius:4,padding:4,color:'#000',
+                        font:{weight:'bold',size:10},
+                        formatter:value=>value>0?value:''
+                    }
+                },
+                scales:{y:{beginAtZero:true}}
+            }
+        });
+    }
+    updateCancellationChart() {
+        const chart = this.charts.cancellation;
+        if (!chart) return;
+        const { labels, data } = this.computeCancellationSynthetic();
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = data;
+        chart.update();
+    }
+    computeCancellationSynthetic() {
+        const cancelledOrders = this.filteredData.filter(order=>this.getOrderStatus(order)==='Cancelled');
+        const reasons = ['Restaurant Delay','Customer Request','Payment Failed','Item Unavailable','Rider Issues'];
+        const counts = new Array(reasons.length).fill(0);
+        cancelledOrders.forEach((_, index)=>{ counts[index % reasons.length]++; });
+        return { labels: reasons, data: counts };
+    }
+
+    // ---- Peak Hour (order counts per hour)
+    createPeakHourChart() {
+        const ctx = $('peakHourChart').getContext('2d');
+        const { labels, data } = this.computePeakHour();
+        this.charts.peakHour = new Chart(ctx,{
+            type:'line',
+            data:{ labels, datasets:[{ label:'Total Orders', data, borderColor:'rgba(102,126,234,1)', backgroundColor:'rgba(102,126,234,0.1)', fill:true, tension:0.4 }]},
+            options:{
+                responsive:true, maintainAspectRatio:false,
+                onClick: (event, elements) => {
+                    if (elements && elements.length > 0) {
+                        const index = elements[0].index;
+                        const hour = this.hourOrder[index];
+                        const label = `hour: ${labels[index]}`;
+                        this.applyCrossFilter('hour', (order) => {
+                            const receivedTime = this.getReceivedTime(order);
+                            return receivedTime && receivedTime.getHours() === hour;
+                        }, label);
+                    }
+                },
+                plugins:{
+                    legend:{display:false},
+                    datalabels:{
+                        display:true,
+                        backgroundColor:'rgba(255,255,255,0.8)',borderColor:'#ccc',borderWidth:1,borderRadius:4,padding:4,color:'#000',
+                        font:{weight:'bold',size:10},
+                        formatter:value=>value>0?value:''
+                    }
+                },
+                scales:{y:{beginAtZero:true}}
+            }
+        });
+    }
+    updatePeakHourChart() {
+        const chart = this.charts.peakHour;
+        if (!chart) return;
+        const { labels, data } = this.computePeakHour();
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = data;
+        chart.update();
+    }
+    computePeakHour() {
+        const stats = {}; this.hourOrder.forEach(h => stats[h] = 0);
+        this.filteredData.forEach(order => {
+            const rt = this.getReceivedTime(order);
+            if (!rt) return;
+            const hour = rt.getHours();
+            if (hour in stats) stats[hour]++;
+        });
+        const labels = this.hourOrder.map(hourToLabel);
+        const data = this.hourOrder.map(h => stats[h]);
+        return { labels, data };
+    }
+
+    // ---- Hourly KPT
+    createHourlyKPTChart() {
+        const ctx = $('hourlyKPTChart').getContext('2d');
+        const { labels, data } = this.computeHourlyKPT();
+        this.charts.hourlyKPT = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets: [{ label: 'Avg KPT (min)', data, borderColor: '#FF5722', backgroundColor: 'rgba(255,87,34,0.1)', fill: true, tension: 0.4 }]},
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                onClick: (event, elements) => {
+                    if (elements && elements.length > 0) {
+                        const idx = elements[0].index;
+                        const hour = this.hourOrder[idx];
+                        const label = `kptHour: ${labels[idx]}`;
+                        this.applyCrossFilter('kptHour', (order) => {
+                            const acc = this.getAcceptedTime(order);
+                            return acc && acc.getHours() === hour;
+                        }, label);
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    datalabels:{display:true, backgroundColor:'rgba(255,255,255,0.9)',color:'#FF5722',borderRadius:8,padding:3,
+                        font:{weight:'bold',size:12},formatter:(v)=>v>0?v:''
+                    }
+                },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+    updateHourlyKPTChart() {
+        const chart = this.charts.hourlyKPT;
+        if (!chart) return;
+        const { labels, data } = this.computeHourlyKPT();
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = data;
+        chart.update();
+    }
+    computeHourlyKPT() {
+        const sums = {}, counts = {};
+        this.hourOrder.forEach(h => { sums[h]=0; counts[h]=0; });
+        this.filteredData.forEach(order=>{
+            const acc = this.getAcceptedTime(order), mr = this.getMarkReadyTime(order);
+            if (acc && mr) {
+                const hour= acc.getHours();
+                if (hour in sums) { sums[hour] += minutesBetween(acc, mr); counts[hour]++; }
+            }
+        });
+        const labels = this.hourOrder.map(hourToLabel);
+        const data = this.hourOrder.map(h => counts[h] ? +(sums[h]/counts[h]).toFixed(2) : 0);
+        return { labels, data };
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.dashboard = new RestaurantDashboard();
+});
+</script>
+</body>
+</html>
